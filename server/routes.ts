@@ -34,8 +34,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get('/api/dashboard/metrics', isAuthenticated, async (req: any, res) => {
     try {
       const userId = req.user.claims.sub;
-      // For now, use a default org - in production, get from user's org membership
-      const orgId = "default-org-id";
+      // Get or create default organization
+      const orgId = await storage.ensureDefaultOrganization();
+      
+      // Create default org user if doesn't exist
+      let orgUser = await storage.getOrganizationUser(userId, orgId);
+      if (!orgUser) {
+        orgUser = await storage.createOrganizationUser({
+          userId,
+          orgId,
+          role: 'admin',
+          customPermissions: {},
+          department: 'Engineering',
+          isActive: true,
+          joinedAt: new Date()
+        });
+      }
       
       const metrics = await storage.getDashboardMetrics(orgId);
       res.json(metrics);
@@ -48,7 +62,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get('/api/dashboard/activity', isAuthenticated, async (req: any, res) => {
     try {
       const userId = req.user.claims.sub;
-      const orgId = "default-org-id";
+      const orgId = await storage.ensureDefaultOrganization();
       
       const activity = await storage.getRecentActivity(orgId, 10);
       res.json(activity);
@@ -61,7 +75,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get('/api/dashboard/pending-approvals', isAuthenticated, async (req: any, res) => {
     try {
       const userId = req.user.claims.sub;
-      const orgId = "default-org-id";
+      const orgId = await storage.ensureDefaultOrganization();
       
       const approvals = await storage.getPendingApprovals(userId, orgId);
       res.json(approvals);
@@ -74,7 +88,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // ECR routes
   app.get('/api/ecr', isAuthenticated, async (req: any, res) => {
     try {
-      const orgId = "default-org-id";
+      const orgId = await storage.ensureDefaultOrganization();
       const status = req.query.status as string;
       
       const ecrs = await storage.getECRs(orgId, status);
@@ -88,7 +102,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post('/api/ecr', isAuthenticated, async (req: any, res) => {
     try {
       const userId = req.user.claims.sub;
-      const orgId = "default-org-id";
+      const orgId = await storage.ensureDefaultOrganization();
       
       const validatedData = insertEcrSchema.parse({
         ...req.body,
@@ -147,7 +161,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // ECO routes
   app.get('/api/eco', isAuthenticated, async (req: any, res) => {
     try {
-      const orgId = "default-org-id";
+      const orgId = await storage.ensureDefaultOrganization();
       const status = req.query.status as string;
       
       const ecos = await storage.getECOs(orgId, status);
@@ -161,7 +175,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post('/api/eco', isAuthenticated, async (req: any, res) => {
     try {
       const userId = req.user.claims.sub;
-      const orgId = "default-org-id";
+      const orgId = await storage.ensureDefaultOrganization();
       
       const validatedData = insertEcoSchema.parse({
         ...req.body,
@@ -207,7 +221,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // ECN routes
   app.get('/api/ecn', isAuthenticated, async (req: any, res) => {
     try {
-      const orgId = "default-org-id";
+      const orgId = await storage.ensureDefaultOrganization();
       const status = req.query.status as string;
       
       const ecns = await storage.getECNs(orgId, status);
@@ -220,7 +234,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post('/api/ecn', isAuthenticated, async (req: any, res) => {
     try {
-      const orgId = "default-org-id";
+      const orgId = await storage.ensureDefaultOrganization();
       
       const validatedData = insertEcnSchema.parse({
         ...req.body,
@@ -309,7 +323,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get('/api/notifications', isAuthenticated, async (req: any, res) => {
     try {
       const userId = req.user.claims.sub;
-      const orgId = "default-org-id";
+      const orgId = await storage.ensureDefaultOrganization();
       
       const notifications = await storage.getNotifications(userId, orgId);
       res.json(notifications);

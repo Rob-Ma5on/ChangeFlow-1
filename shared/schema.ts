@@ -99,7 +99,7 @@ export const ecos = pgTable("ecos", {
   id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
   orgId: uuid("org_id").references(() => organizations.id).notNull(),
   ecoNumber: varchar("eco_number", { length: 20 }).notNull(),
-  parentEcoId: uuid("parent_eco_id").references(() => ecos.id),
+  parentEcoId: uuid("parent_eco_id"),
   title: varchar("title", { length: 255 }).notNull(),
   description: text("description"),
   technicalDetails: text("technical_details"),

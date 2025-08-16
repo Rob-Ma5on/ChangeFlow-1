@@ -1,30 +1,45 @@
 import { useQuery } from "@tanstack/react-query";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Skeleton } from "@/components/ui/skeleton";
+import { Clock, FileText, CheckCircle, XCircle } from "lucide-react";
+import { format } from "date-fns";
 
-export default function RecentActivity() {
-  const { data: activities, isLoading } = useQuery({
+interface ActivityItem {
+  id: string;
+  type: string;
+  entityType: 'ECR' | 'ECO' | 'ECN';
+  entityId: string;
+  entityNumber: string;
+  title: string;
+  action: string;
+  userId: string;
+  userEmail: string;
+  createdAt: Date;
+}
+
+function RecentActivity() {
+  const { data: activities = [], isLoading, error } = useQuery<ActivityItem[]>({
     queryKey: ['/api/dashboard/activity'],
   });
 
   if (isLoading) {
     return (
-      <Card className="shadow-sm">
-        <CardHeader className="border-b border-border">
-          <CardTitle>Recent Activity</CardTitle>
+      <Card data-testid="recent-activity-loading">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Clock className="h-5 w-5" />
+            Recent Activity
+          </CardTitle>
         </CardHeader>
-        <CardContent className="p-6">
-          <div className="space-y-4">
-            {Array.from({ length: 4 }).map((_, i) => (
-              <div key={i} className="flex items-start space-x-4">
-                <Skeleton className="w-8 h-8 rounded-full flex-shrink-0" />
+        <CardContent>
+          <div className="space-y-3">
+            {[...Array(5)].map((_, i) => (
+              <div key={i} className="flex items-start space-x-3 animate-pulse">
+                <div className="w-8 h-8 bg-muted rounded-full"></div>
                 <div className="flex-1 space-y-2">
-                  <Skeleton className="h-4 w-3/4" />
-                  <Skeleton className="h-3 w-1/4" />
+                  <div className="h-4 bg-muted rounded w-3/4"></div>
+                  <div className="h-3 bg-muted rounded w-1/2"></div>
                 </div>
-                <Skeleton className="h-6 w-20 rounded-full" />
               </div>
             ))}
           </div>
@@ -33,91 +48,94 @@ export default function RecentActivity() {
     );
   }
 
-  const getActivityIcon = (type: string) => {
-    switch (type) {
-      case 'ECR':
-        return (
-          <div className="w-8 h-8 bg-[hsl(203.8863,88.2845%,53.1373%)]/10 rounded-full flex items-center justify-center flex-shrink-0">
-            <svg className="w-4 h-4 text-[hsl(203.8863,88.2845%,53.1373%)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-            </svg>
+  if (error) {
+    return (
+      <Card data-testid="recent-activity-error">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Clock className="h-5 w-5" />
+            Recent Activity
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="text-muted-foreground">
+            Unable to load recent activity
           </div>
-        );
-      case 'ECO':
-        return (
-          <div className="w-8 h-8 bg-[hsl(147.1429,78.5047%,41.9608%)]/10 rounded-full flex items-center justify-center flex-shrink-0">
-            <svg className="w-4 h-4 text-[hsl(147.1429,78.5047%,41.9608%)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" />
-            </svg>
-          </div>
-        );
-      default:
-        return (
-          <div className="w-8 h-8 bg-[hsl(203.8863,88.2845%,53.1373%)]/10 rounded-full flex items-center justify-center flex-shrink-0">
-            <svg className="w-4 h-4 text-[hsl(203.8863,88.2845%,53.1373%)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-5 5V7a1 1 0 011-1h5m-5 10v-5a1 1 0 00-1-1H4a1 1 0 00-1 1v5a1 1 0 001 1h5z" />
-            </svg>
-          </div>
-        );
+        </CardContent>
+      </Card>
+    );
+  }
+
+  const getActivityIcon = (entityType: string, action: string) => {
+    if (action.includes('approved')) return <CheckCircle className="h-4 w-4 text-green-600" />;
+    if (action.includes('rejected')) return <XCircle className="h-4 w-4 text-red-600" />;
+    return <FileText className="h-4 w-4 text-blue-600" />;
+  };
+
+  const getActivityColor = (entityType: string) => {
+    switch (entityType) {
+      case 'ECR': return 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200';
+      case 'ECO': return 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200';
+      case 'ECN': return 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200';
+      default: return 'bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-200';
     }
   };
 
-  const getStatusBadge = (status: string) => {
-    const statusConfig = {
-      'submitted': { variant: 'outline' as const, label: 'Pending Review' },
-      'approved': { variant: 'default' as const, label: 'Approved' },
-      'completed': { variant: 'default' as const, label: 'Completed' },
-      'rejected': { variant: 'destructive' as const, label: 'Rejected' },
-      'draft': { variant: 'secondary' as const, label: 'Draft' },
-    };
-
-    const config = statusConfig[status as keyof typeof statusConfig] || { variant: 'secondary' as const, label: status };
-    
-    return (
-      <Badge variant={config.variant} className="text-xs">
-        {config.label}
-      </Badge>
-    );
-  };
-
   return (
-    <Card className="shadow-sm" data-testid="recent-activity">
-      <CardHeader className="border-b border-border">
-        <CardTitle>Recent Activity</CardTitle>
+    <Card data-testid="recent-activity-card">
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <Clock className="h-5 w-5" />
+          Recent Activity
+        </CardTitle>
+        <CardDescription>
+          Latest changes across all engineering processes
+        </CardDescription>
       </CardHeader>
-      <CardContent className="p-6">
+      <CardContent>
         <div className="space-y-4">
-          {activities && activities.length > 0 ? (
-            activities.map((activity: any, index: number) => (
-              <div key={activity.id || index} className="flex items-start space-x-4" data-testid={`activity-item-${index}`}>
-                {getActivityIcon(activity.type)}
-                <div className="flex-1">
-                  <p className="text-sm text-foreground" data-testid={`activity-description-${index}`}>
-                    Activity for <span className="font-medium">{activity.title}</span>
+          {activities.length === 0 ? (
+            <div className="text-center py-8 text-muted-foreground" data-testid="no-activity">
+              <FileText className="h-8 w-8 mx-auto mb-2 opacity-50" />
+              <p>No recent activity</p>
+            </div>
+          ) : (
+            activities.map((activity) => (
+              <div
+                key={activity.id}
+                className="flex items-start space-x-3 p-3 rounded-lg bg-muted/30"
+                data-testid={`activity-item-${activity.id}`}
+              >
+                <div className="flex-shrink-0 mt-1">
+                  {getActivityIcon(activity.entityType, activity.action)}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 mb-1">
+                    <Badge
+                      variant="secondary"
+                      className={getActivityColor(activity.entityType)}
+                      data-testid={`badge-${activity.entityType.toLowerCase()}`}
+                    >
+                      {activity.entityNumber}
+                    </Badge>
+                  </div>
+                  <p className="text-sm font-medium text-foreground">
+                    {activity.title}
                   </p>
-                  <p className="text-xs text-muted-foreground" data-testid={`activity-time-${index}`}>
-                    {new Date(activity.createdAt).toLocaleString()}
+                  <p className="text-sm text-muted-foreground">
+                    {activity.action} by {activity.userEmail}
+                  </p>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    {format(new Date(activity.createdAt), 'MMM d, h:mm a')}
                   </p>
                 </div>
-                {getStatusBadge(activity.status)}
               </div>
             ))
-          ) : (
-            <div className="text-center py-8" data-testid="empty-activity">
-              <svg className="w-12 h-12 text-muted-foreground mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
-              </svg>
-              <h3 className="text-lg font-medium text-foreground mb-2">No recent activity</h3>
-              <p className="text-muted-foreground">Activity will appear here as you work with ECRs, ECOs, and ECNs</p>
-            </div>
           )}
         </div>
-        {activities && activities.length > 0 && (
-          <Button variant="link" className="mt-4 p-0 h-auto text-[hsl(203.8863,88.2845%,53.1373%)]" data-testid="button-view-all-activity">
-            View all activity
-          </Button>
-        )}
       </CardContent>
     </Card>
   );
 }
+
+export default RecentActivity;

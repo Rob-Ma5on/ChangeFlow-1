@@ -102,6 +102,31 @@ export interface IStorage {
 }
 
 export class DatabaseStorage implements IStorage {
+  async ensureDefaultOrganization(): Promise<string> {
+    // Check if default org exists
+    const existingOrg = await this.getOrganizationBySubdomain('default');
+    if (existingOrg) {
+      return existingOrg.id;
+    }
+
+    // Create default organization with proper UUID
+    const defaultOrg = await this.createOrganization({
+      name: 'Default Organization',
+      subdomain: 'default',
+      planType: 'professional',
+      maxUsers: 50,
+      subscriptionStatus: 'active',
+      settings: {
+        enableChangeReviewBoard: true,
+        ecrPrefix: 'ECR',
+        ecoPrefix: 'ECO',
+        ecnPrefix: 'ECN',
+        approvalLevels: [1, 2],
+        notificationSettings: {}
+      }
+    });
+    return defaultOrg.id;
+  }
   // User operations
   async getUser(id: string): Promise<User | undefined> {
     const [user] = await db.select().from(users).where(eq(users.id, id));
@@ -135,7 +160,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createOrganization(orgData: InsertOrganization): Promise<Organization> {
-    const [org] = await db.insert(organizations).values(orgData).returning();
+    const [org] = await db.insert(organizations).values([orgData]).returning();
     return org;
   }
 
@@ -159,7 +184,7 @@ export class DatabaseStorage implements IStorage {
 
   // ECR operations
   async createECR(ecrData: InsertECR): Promise<ECR> {
-    const [ecr] = await db.insert(ecrs).values(ecrData).returning();
+    const [ecr] = await db.insert(ecrs).values([ecrData]).returning();
     return ecr;
   }
 
@@ -169,11 +194,11 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getECRs(orgId: string, status?: string): Promise<ECR[]> {
-    const query = db.select().from(ecrs).where(eq(ecrs.orgId, orgId));
+    let whereCondition = eq(ecrs.orgId, orgId);
     if (status) {
-      query.where(and(eq(ecrs.orgId, orgId), eq(ecrs.status, status)));
+      whereCondition = and(eq(ecrs.orgId, orgId), eq(ecrs.status, status));
     }
-    return query.orderBy(desc(ecrs.createdAt));
+    return db.select().from(ecrs).where(whereCondition).orderBy(desc(ecrs.createdAt));
   }
 
   async updateECR(id: string, updates: Partial<ECR>): Promise<ECR> {
@@ -193,11 +218,11 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getECOs(orgId: string, status?: string): Promise<ECO[]> {
-    const query = db.select().from(ecos).where(eq(ecos.orgId, orgId));
+    let whereCondition = eq(ecos.orgId, orgId);
     if (status) {
-      query.where(and(eq(ecos.orgId, orgId), eq(ecos.status, status)));
+      whereCondition = and(eq(ecos.orgId, orgId), eq(ecos.status, status));
     }
-    return query.orderBy(desc(ecos.createdAt));
+    return db.select().from(ecos).where(whereCondition).orderBy(desc(ecos.createdAt));
   }
 
   async updateECO(id: string, updates: Partial<ECO>): Promise<ECO> {
@@ -207,7 +232,7 @@ export class DatabaseStorage implements IStorage {
 
   // ECN operations
   async createECN(ecnData: InsertECN): Promise<ECN> {
-    const [ecn] = await db.insert(ecns).values(ecnData).returning();
+    const [ecn] = await db.insert(ecns).values([ecnData]).returning();
     return ecn;
   }
 
@@ -217,11 +242,11 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getECNs(orgId: string, status?: string): Promise<ECN[]> {
-    const query = db.select().from(ecns).where(eq(ecns.orgId, orgId));
+    let whereCondition = eq(ecns.orgId, orgId);
     if (status) {
-      query.where(and(eq(ecns.orgId, orgId), eq(ecns.implementationStatus, status)));
+      whereCondition = and(eq(ecns.orgId, orgId), eq(ecns.implementationStatus, status));
     }
-    return query.orderBy(desc(ecns.createdAt));
+    return db.select().from(ecns).where(whereCondition).orderBy(desc(ecns.createdAt));
   }
 
   async updateECN(id: string, updates: Partial<ECN>): Promise<ECN> {

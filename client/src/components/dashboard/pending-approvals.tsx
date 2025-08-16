@@ -1,48 +1,48 @@
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
+import { useQuery, useMutation } from "@tanstack/react-query";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Skeleton } from "@/components/ui/skeleton";
+import { Badge } from "@/components/ui/badge";
+import { CheckCircle, XCircle, Clock, AlertCircle } from "lucide-react";
+import { format } from "date-fns";
+import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import { apiRequest } from "@/lib/queryClient";
-import { isUnauthorizedError } from "@/lib/authUtils";
 
-export default function PendingApprovals() {
+interface PendingApproval {
+  id: string;
+  entityType: 'ECR' | 'ECO' | 'ECN';
+  entityId: string;
+  entityNumber: string;
+  title: string;
+  requestorEmail: string;
+  approvalLevel: number;
+  priority?: string;
+  createdAt: Date;
+}
+
+function PendingApprovals() {
   const { toast } = useToast();
-  const queryClient = useQueryClient();
-  
-  const { data: approvals, isLoading } = useQuery({
+  const { data: approvals = [], isLoading, error } = useQuery<PendingApproval[]>({
     queryKey: ['/api/dashboard/pending-approvals'],
   });
 
   const approveMutation = useMutation({
-    mutationFn: async ({ approvalId, status }: { approvalId: string; status: string }) => {
-      const response = await apiRequest("PUT", `/api/approvals/${approvalId}`, { status });
-      return response.json();
+    mutationFn: async ({ id, action }: { id: string; action: 'approve' | 'reject' }) => {
+      await apiRequest(`/api/approvals/${id}/${action}`, {
+        method: 'POST',
+      });
     },
-    onSuccess: () => {
+    onSuccess: (_, { action }) => {
       toast({
         title: "Success",
-        description: "Approval updated successfully",
+        description: `Request ${action}d successfully`,
       });
       queryClient.invalidateQueries({ queryKey: ['/api/dashboard/pending-approvals'] });
       queryClient.invalidateQueries({ queryKey: ['/api/dashboard/metrics'] });
     },
-    onError: (error) => {
-      if (isUnauthorizedError(error)) {
-        toast({
-          title: "Unauthorized",
-          description: "You are logged out. Logging in again...",
-          variant: "destructive",
-        });
-        setTimeout(() => {
-          window.location.href = "/api/login";
-        }, 500);
-        return;
-      }
+    onError: (error: Error) => {
       toast({
         title: "Error",
-        description: "Failed to update approval. Please try again.",
+        description: error.message || "Failed to process approval",
         variant: "destructive",
       });
     },
@@ -50,22 +50,24 @@ export default function PendingApprovals() {
 
   if (isLoading) {
     return (
-      <Card className="shadow-sm">
-        <CardHeader className="border-b border-border">
-          <CardTitle>Pending Approvals</CardTitle>
+      <Card data-testid="pending-approvals-loading">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Clock className="h-5 w-5" />
+            Pending Approvals
+          </CardTitle>
         </CardHeader>
-        <CardContent className="p-6">
+        <CardContent>
           <div className="space-y-4">
-            {Array.from({ length: 3 }).map((_, i) => (
-              <div key={i} className="border border-border rounded-lg p-4">
-                <div className="flex items-center justify-between mb-2">
-                  <Skeleton className="h-4 w-20" />
-                  <Skeleton className="h-5 w-16 rounded-full" />
+            {[...Array(3)].map((_, i) => (
+              <div key={i} className="flex items-center justify-between p-4 border rounded-lg animate-pulse">
+                <div className="flex-1 space-y-2">
+                  <div className="h-4 bg-muted rounded w-1/2"></div>
+                  <div className="h-3 bg-muted rounded w-3/4"></div>
                 </div>
-                <Skeleton className="h-4 w-full mb-3" />
-                <div className="flex space-x-2">
-                  <Skeleton className="h-8 flex-1" />
-                  <Skeleton className="h-8 flex-1" />
+                <div className="flex gap-2">
+                  <div className="h-8 w-16 bg-muted rounded"></div>
+                  <div className="h-8 w-16 bg-muted rounded"></div>
                 </div>
               </div>
             ))}
@@ -75,84 +77,133 @@ export default function PendingApprovals() {
     );
   }
 
-  const getPriorityVariant = (priority: string) => {
+  if (error) {
+    return (
+      <Card data-testid="pending-approvals-error">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Clock className="h-5 w-5" />
+            Pending Approvals
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="text-muted-foreground">
+            Unable to load pending approvals
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  const getPriorityColor = (priority: string | undefined) => {
     switch (priority) {
-      case 'critical':
-      case 'high':
-        return 'destructive' as const;
-      case 'medium':
-        return 'default' as const;
-      case 'low':
-        return 'secondary' as const;
-      default:
-        return 'secondary' as const;
+      case 'critical': return 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200';
+      case 'high': return 'bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200';
+      case 'medium': return 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200';
+      case 'low': return 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200';
+      default: return 'bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-200';
     }
   };
 
-  const handleApproval = (approvalId: string, status: 'approved' | 'rejected') => {
-    approveMutation.mutate({ approvalId, status });
+  const getEntityColor = (entityType: string) => {
+    switch (entityType) {
+      case 'ECR': return 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200';
+      case 'ECO': return 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200';
+      case 'ECN': return 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200';
+      default: return 'bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-200';
+    }
   };
 
   return (
-    <Card className="shadow-sm" data-testid="pending-approvals">
-      <CardHeader className="border-b border-border">
-        <CardTitle>Pending Approvals</CardTitle>
+    <Card data-testid="pending-approvals-card">
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <Clock className="h-5 w-5" />
+          Pending Approvals
+          {approvals.length > 0 && (
+            <Badge variant="destructive" data-testid="approval-count">
+              {approvals.length}
+            </Badge>
+          )}
+        </CardTitle>
+        <CardDescription>
+          Requests awaiting your approval decision
+        </CardDescription>
       </CardHeader>
-      <CardContent className="p-6">
+      <CardContent>
         <div className="space-y-4">
-          {approvals && approvals.length > 0 ? (
-            approvals.map((approval: any, index: number) => (
-              <div key={approval.id} className="border border-border rounded-lg p-4" data-testid={`approval-item-${index}`}>
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-sm font-medium text-foreground" data-testid={`approval-number-${index}`}>
-                    {approval.entityType}-{approval.entityId?.slice(0, 8)}
-                  </span>
-                  <Badge variant={getPriorityVariant('high')} className="text-xs">
-                    High Priority
-                  </Badge>
+          {approvals.length === 0 ? (
+            <div className="text-center py-8 text-muted-foreground" data-testid="no-approvals">
+              <CheckCircle className="h-8 w-8 mx-auto mb-2 opacity-50" />
+              <p>No pending approvals</p>
+            </div>
+          ) : (
+            approvals.map((approval) => (
+              <div
+                key={approval.id}
+                className="flex items-center justify-between p-4 border rounded-lg"
+                data-testid={`approval-item-${approval.id}`}
+              >
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 mb-2">
+                    <Badge
+                      variant="secondary"
+                      className={getEntityColor(approval.entityType)}
+                      data-testid={`badge-${approval.entityType.toLowerCase()}`}
+                    >
+                      {approval.entityNumber}
+                    </Badge>
+                    {approval.priority && (
+                      <Badge
+                        variant="secondary"
+                        className={getPriorityColor(approval.priority)}
+                        data-testid={`priority-${approval.priority}`}
+                      >
+                        {approval.priority}
+                      </Badge>
+                    )}
+                  </div>
+                  <h4 className="font-medium text-foreground mb-1">
+                    {approval.title}
+                  </h4>
+                  <p className="text-sm text-muted-foreground">
+                    Submitted by {approval.requestorEmail}
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    {format(new Date(approval.createdAt), 'MMM d, h:mm a')}
+                  </p>
                 </div>
-                <p className="text-sm text-muted-foreground mb-3" data-testid={`approval-description-${index}`}>
-                  Approval required for {approval.entityType.toLowerCase()}
-                </p>
-                <div className="flex space-x-2">
-                  <Button 
-                    size="sm" 
-                    className="flex-1 bg-[hsl(147.1429,78.5047%,41.9608%)] hover:bg-[hsl(147.1429,78.5047%,35%)] text-white"
-                    onClick={() => handleApproval(approval.id, 'approved')}
+                <div className="flex gap-2 ml-4">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="text-green-600 hover:text-green-700 hover:bg-green-50"
+                    onClick={() => approveMutation.mutate({ id: approval.id, action: 'approve' })}
                     disabled={approveMutation.isPending}
-                    data-testid={`button-approve-${index}`}
+                    data-testid={`approve-${approval.id}`}
                   >
-                    {approveMutation.isPending ? 'Approving...' : 'Approve'}
+                    <CheckCircle className="h-4 w-4 mr-1" />
+                    Approve
                   </Button>
-                  <Button 
-                    variant="outline" 
-                    size="sm" 
-                    className="flex-1"
-                    onClick={() => handleApproval(approval.id, 'rejected')}
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                    onClick={() => approveMutation.mutate({ id: approval.id, action: 'reject' })}
                     disabled={approveMutation.isPending}
-                    data-testid={`button-reject-${index}`}
+                    data-testid={`reject-${approval.id}`}
                   >
-                    {approveMutation.isPending ? 'Processing...' : 'Review'}
+                    <XCircle className="h-4 w-4 mr-1" />
+                    Reject
                   </Button>
                 </div>
               </div>
             ))
-          ) : (
-            <div className="text-center py-8" data-testid="empty-approvals">
-              <svg className="w-12 h-12 text-muted-foreground mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-              <h3 className="text-lg font-medium text-foreground mb-2">No pending approvals</h3>
-              <p className="text-muted-foreground">All items have been reviewed</p>
-            </div>
           )}
         </div>
-        {approvals && approvals.length > 0 && (
-          <Button variant="link" className="mt-4 w-full p-0 h-auto text-[hsl(203.8863,88.2845%,53.1373%)]" data-testid="button-view-all-pending">
-            View all pending
-          </Button>
-        )}
       </CardContent>
     </Card>
   );
 }
+
+export default PendingApprovals;

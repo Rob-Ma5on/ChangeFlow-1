@@ -1,122 +1,129 @@
 import { useQuery } from "@tanstack/react-query";
-import { Card, CardContent } from "@/components/ui/card";
-import { Skeleton } from "@/components/ui/skeleton";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { FileText, Settings, Bell, CheckCircle, TrendingUp, AlertTriangle } from "lucide-react";
 
-export default function MetricsCards() {
-  const { data: metrics, isLoading } = useQuery({
+interface MetricData {
+  activeECRs: number;
+  inProgressECOs: number;
+  pendingApprovals: number;
+  completedThisMonth: number;
+}
+
+function MetricsCards() {
+  const { data: metrics = {} as MetricData, isLoading, error } = useQuery<MetricData>({
     queryKey: ['/api/dashboard/metrics'],
   });
 
   if (isLoading) {
     return (
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        {Array.from({ length: 4 }).map((_, i) => (
-          <Card key={i} className="p-6">
-            <div className="flex items-center justify-between">
-              <div className="space-y-2">
-                <Skeleton className="h-4 w-20" />
-                <Skeleton className="h-8 w-16" />
-              </div>
-              <Skeleton className="h-12 w-12 rounded-lg" />
-            </div>
-            <div className="mt-4 flex items-center">
-              <Skeleton className="h-4 w-12" />
-              <Skeleton className="h-4 w-20 ml-2" />
-            </div>
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4" data-testid="metrics-loading">
+        {[...Array(4)].map((_, i) => (
+          <Card key={i} className="animate-pulse">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <div className="h-4 bg-muted rounded w-20"></div>
+              <div className="h-4 w-4 bg-muted rounded"></div>
+            </CardHeader>
+            <CardContent>
+              <div className="h-8 bg-muted rounded w-12 mb-2"></div>
+              <div className="h-3 bg-muted rounded w-32"></div>
+            </CardContent>
           </Card>
         ))}
       </div>
     );
   }
 
-  const metricsData = [
+  if (error) {
+    return (
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4" data-testid="metrics-error">
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-destructive">Error</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-sm text-muted-foreground">Unable to load metrics</p>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  const metricCards = [
     {
       title: "Active ECRs",
-      value: metrics?.activeECRs || 0,
-      icon: (
-        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-        </svg>
-      ),
-      change: "+12%",
-      changeType: "positive",
-      bgColor: "bg-[hsl(203.8863,88.2845%,53.1373%)]/10",
-      iconColor: "text-[hsl(203.8863,88.2845%,53.1373%)]",
-      testId: "metrics-active-ecrs"
+      value: metrics.activeECRs || 0,
+      description: "Engineering Change Requests",
+      icon: FileText,
+      trend: "+12% from last month",
+      color: "text-blue-600",
+      bgColor: "bg-blue-50",
+      testId: "metric-active-ecrs"
     },
     {
-      title: "In Progress ECOs",
-      value: metrics?.inProgressECOs || 0,
-      icon: (
-        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" />
-        </svg>
-      ),
-      change: "+5%",
-      changeType: "positive",
-      bgColor: "bg-[hsl(42.0290,92.8251%,56.2745%)]/10",
-      iconColor: "text-[hsl(42.0290,92.8251%,56.2745%)]",
-      testId: "metrics-in-progress-ecos"
+      title: "ECOs in Progress",
+      value: metrics.inProgressECOs || 0,
+      description: "Engineering Change Orders",
+      icon: Settings,
+      trend: "+8% from last month",
+      color: "text-green-600",
+      bgColor: "bg-green-50",
+      testId: "metric-ecos-progress"
     },
     {
       title: "Pending Approvals",
-      value: metrics?.pendingApprovals || 0,
-      icon: (
-        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-        </svg>
-      ),
-      change: "-8%",
-      changeType: "negative",
-      bgColor: "bg-[hsl(356.3033,90.5579%,54.3137%)]/10",
-      iconColor: "text-[hsl(356.3033,90.5579%,54.3137%)]",
-      testId: "metrics-pending-approvals"
+      value: metrics.pendingApprovals || 0,
+      description: "Awaiting review",
+      icon: AlertTriangle,
+      trend: "-5% from last month",
+      color: "text-orange-600",
+      bgColor: "bg-orange-50",
+      testId: "metric-pending-approvals"
     },
     {
       title: "Completed This Month",
-      value: metrics?.completedThisMonth || 0,
-      icon: (
-        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-        </svg>
-      ),
-      change: "+18%",
-      changeType: "positive",
-      bgColor: "bg-[hsl(147.1429,78.5047%,41.9608%)]/10",
-      iconColor: "text-[hsl(147.1429,78.5047%,41.9608%)]",
-      testId: "metrics-completed-month"
+      value: metrics.completedThisMonth || 0,
+      description: "ECNs implemented",
+      icon: CheckCircle,
+      trend: "+15% from last month",
+      color: "text-purple-600",
+      bgColor: "bg-purple-50",
+      testId: "metric-completed-month"
     }
   ];
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6" data-testid="metrics-cards">
-      {metricsData.map((metric, index) => (
-        <Card key={index} className="shadow-sm" data-testid={metric.testId}>
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-muted-foreground" data-testid={`text-${metric.testId}-title`}>
-                  {metric.title}
-                </p>
-                <p className="text-3xl font-bold text-foreground mt-1" data-testid={`text-${metric.testId}-value`}>
-                  {metric.value}
+    <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4" data-testid="metrics-cards">
+      {metricCards.map((card) => {
+        const IconComponent = card.icon;
+        return (
+          <Card key={card.title} data-testid={card.testId}>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium text-muted-foreground">
+                {card.title}
+              </CardTitle>
+              <div className={`${card.bgColor} p-2 rounded-full`}>
+                <IconComponent className={`h-4 w-4 ${card.color}`} />
+              </div>
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold text-foreground" data-testid={`value-${card.testId}`}>
+                {card.value.toLocaleString()}
+              </div>
+              <p className="text-xs text-muted-foreground mt-1">
+                {card.description}
+              </p>
+              <div className="flex items-center mt-2">
+                <TrendingUp className="h-3 w-3 text-emerald-600 mr-1" />
+                <p className="text-xs text-emerald-600">
+                  {card.trend}
                 </p>
               </div>
-              <div className={`w-12 h-12 ${metric.bgColor} rounded-lg flex items-center justify-center`}>
-                <div className={metric.iconColor}>
-                  {metric.icon}
-                </div>
-              </div>
-            </div>
-            <div className="mt-4 flex items-center text-sm">
-              <span className={metric.changeType === 'positive' ? 'text-[hsl(147.1429,78.5047%,41.9608%)]' : 'text-[hsl(356.3033,90.5579%,54.3137%)]'} data-testid={`text-${metric.testId}-change`}>
-                {metric.change}
-              </span>
-              <span className="text-muted-foreground ml-2">from last month</span>
-            </div>
-          </CardContent>
-        </Card>
-      ))}
+            </CardContent>
+          </Card>
+        );
+      })}
     </div>
   );
 }
+
+export default MetricsCards;
