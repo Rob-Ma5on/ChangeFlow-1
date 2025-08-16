@@ -1,0 +1,164 @@
+Build a comprehensive Engineering Change Management (ECM) system for small to mid-size manufacturing companies (5-40 employees, $1M-$50M revenue).
+
+CORE BUSINESS REQUIREMENTS:
+- Three-entity workflow: ECR (Engineering Change Request) → ECO (Engineering Change Order) → ECN (Engineering Change Notice)
+- Numbering system: ECR-YY-###, ECO-YY-###, ECN-YY-### (YY=year, ###=sequential)
+- Multiple ECRs can be bundled into one ECO
+- Parent ECO with child sub-task ECOs capability
+- Target: 50-100 customers Year 1
+- Pricing: Per-user AND per-company tiers with user limits
+
+COMPLETE DATABASE SCHEMA:
+Create PostgreSQL schema with these entities:
+
+1. ORGANIZATIONS Table
+- org_id (UUID primary key)
+- name, subdomain (unique)
+- plan_type (starter/professional/enterprise)
+- max_users, current_users
+- subscription_status, billing_cycle
+- trial_end_date, created_at
+- settings (JSONB): {
+  enable_change_review_board: boolean,
+  ecr_prefix: string,
+  eco_prefix: string,
+  ecn_prefix: string,
+  approval_levels: array,
+  notification_settings: object
+}
+
+2. USERS Table
+- user_id (UUID)
+- org_id (foreign key)
+- email, username, password_hash
+- role (admin/engineering_manager/engineer/requestor/viewer/custom)
+- custom_permissions (JSONB)
+- department, full_name, phone
+- is_active, last_login, created_at
+
+3. ECR (Engineering Change Requests) Table
+- ecr_id (UUID primary key)
+- org_id, ecr_number (ECR-YY-###)
+- title, description, business_justification
+- requestor_id, category, priority
+- status (draft/submitted/under_review/approved/rejected/more_info_needed/crb_review)
+- approval_type (manager_only/change_review_board)
+- estimated_cost, estimated_hours
+- affected_products (JSONB array)
+- affected_departments (JSONB array)
+- created_at, submitted_at, resolved_at
+
+4. ECO (Engineering Change Orders) Table
+- eco_id (UUID primary key)
+- org_id, eco_number (ECO-YY-###)
+- parent_eco_id (nullable, for sub-tasks)
+- title, description, technical_details
+- assigned_engineers (JSONB array of user_ids)
+- lead_engineer_id
+- status (backlog/in_progress/review/completed/on_hold)
+- actual_hours, estimated_hours
+- linked_ecr_ids (JSONB array)
+- implementation_notes
+- created_at, started_at, completed_at
+
+5. ECN (Engineering Change Notices) Table
+- ecn_id (UUID primary key)
+- org_id, ecn_number (ECN-YY-###)
+- eco_id (foreign key)
+- title, implementation_instructions
+- notification_type (review_required/notification_only)
+- affected_departments (JSONB array)
+- approval_status (pending/approved/rejected)
+- implementation_status (waiting/in_progress/completed)
+- created_at, implemented_at
+
+6. APPROVALS Table
+- approval_id (UUID)
+- entity_type (ECR/ECO/ECN)
+- entity_id
+- approver_id, approval_level
+- status (pending/approved/rejected/conditional)
+- comments, conditions
+- created_at, resolved_at
+
+7. COMMENTS Table
+- comment_id (UUID)
+- entity_type (ECR/ECO/ECN)
+- entity_id, user_id
+- comment_text, is_internal
+- created_at, edited_at
+
+8. ATTACHMENTS Table
+- attachment_id (UUID)
+- entity_type (ECR/ECO/ECN)
+- entity_id, uploaded_by
+- file_name, file_path, file_size
+- file_type, created_at
+
+9. AUDIT_LOG Table
+- log_id (UUID)
+- org_id, user_id
+- entity_type, entity_id
+- action (created/updated/approved/rejected/etc)
+- changes (JSONB before/after)
+- ip_address, user_agent
+- created_at
+
+10. NOTIFICATIONS Table
+- notification_id (UUID)
+- user_id, org_id
+- entity_type, entity_id
+- type (approval_required/status_changed/mentioned/etc)
+- title, message, action_url
+- is_read, is_email_sent
+- created_at, read_at
+
+API ENDPOINT STRUCTURE:
+/api/v1/
+├── auth/
+│   ├── login, logout, refresh
+│   └── forgot-password, reset-password
+├── organizations/
+│   ├── settings, billing, users
+│   └── subscription
+├── ecr/
+│   ├── create, list, get/:id
+│   ├── update/:id, delete/:id
+│   ├── submit/:id, approve/:id
+│   └── bundle (combine multiple ECRs)
+├── eco/
+│   ├── create, list, get/:id
+│   ├── update/:id, assign/:id
+│   ├── link-ecr/:id, create-subtask/:id
+│   └── complete/:id
+├── ecn/
+│   ├── create, list, get/:id
+│   ├── notify/:id, approve/:id
+│   └── implement/:id
+├── approvals/
+│   ├── pending, history
+│   └── bulk-approve
+├── reports/
+│   ├── dashboard, metrics
+│   └── export
+└── admin/
+    ├── users, roles
+    └── system-settings
+
+SECURITY & PERFORMANCE:
+- Row-level security with org_id filtering
+- API rate limiting: 100 req/min per user
+- Database indexing on: org_id, status fields, number fields
+- Soft deletes with deleted_at timestamps
+- JSONB fields for flexibility without schema changes
+- Prepared statements for SQL injection prevention
+- Session-based auth with 24hr timeout
+- Role-based access control (RBAC)
+
+FUTURE FEATURES SCHEMA (design now, implement later):
+- INTEGRATIONS table (ERP/PLM connections)
+- TEMPLATES table (ECR/ECO templates)
+- REPORTS table (saved report configurations)
+- WEBHOOKS table (external notifications)
+- TIME_TRACKING table (detailed time logs)
+- COST_TRACKING table (actual vs estimated)
